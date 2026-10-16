@@ -10,7 +10,9 @@ import {
 } from "./lib";
 import { Icon, Link, ErrorBox, Loading, Status } from "./ui";
 import Admin from "./Admin";
+import { Auth } from "./Auth";
 import "./styles.css";
+import "./design.css";
 
 function Header({ path }) {
   const [menu, setMenu] = useState(false);
@@ -41,15 +43,15 @@ function Header({ path }) {
           </Link>
           <Link to="/#how">Как это работает</Link>
           <Link to="/#about">О проекте</Link>
+          <Link to="/register" className="mobile-registration">Регистрация</Link>
         </nav>
         <div className="header-right">
           <span className="city">
             <Icon name="pin" size={15} />
             Астана
           </span>
-          <Link to="/admin" className="admin-link">
-            Для студии <Icon name="diagonal" size={15} />
-          </Link>
+          <Link to="/login" className="admin-link">Войти</Link>
+          <Link to="/register" className="admin-link">Регистрация</Link>
         </div>
       </header>
     </>
@@ -84,6 +86,33 @@ function Home({ locations, error, retry }) {
   const [filter, setFilter] = useState("Все локации");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("default");
+  const [heroType, setHeroType] = useState("Все локации");
+  const [searchDate, setSearchDate] = useState("");
+  const [searchDuration, setSearchDuration] = useState(1);
+  const [availableIds, setAvailableIds] = useState(null);
+  const [appliedDate, setAppliedDate] = useState("");
+  const [appliedDuration, setAppliedDuration] = useState(1);
+  const [finding, setFinding] = useState(false);
+  const [findError, setFindError] = useState("");
+  async function findSpaces(event) {
+    event.preventDefault();
+    if (finding) return;
+    setFinding(true); setFindError("");
+    try {
+      let available = null;
+      if (searchDate) {
+        const results = await Promise.all(locations.map(async loc => {
+          const data = await api(`/locations/${loc.id}/availability?date=${searchDate}&duration=${searchDuration}`);
+          return data.slots.some(slot => slot.available) ? loc.id : null;
+        }));
+        available = results.filter(Boolean);
+      }
+      setAvailableIds(available); setFilter(heroType); setSearch("");
+      setAppliedDate(searchDate); setAppliedDuration(searchDuration);
+      document.getElementById("locations")?.scrollIntoView({ behavior: "smooth" });
+    } catch (e) { setFindError(e.message); }
+    finally { setFinding(false); }
+  }
   const categories = [
     "Все локации",
     "Лофт",
@@ -96,6 +125,7 @@ function Home({ locations, error, retry }) {
     const cat = l.type === "Крыша" ? "На открытом воздухе" : l.type;
     return (
       (filter === "Все локации" || cat === filter) &&
+      (availableIds === null || availableIds.includes(l.id)) &&
       `${l.name} ${l.description} ${l.type}`
         .toLowerCase()
         .includes(search.toLowerCase())
@@ -105,91 +135,38 @@ function Home({ locations, error, retry }) {
   if (sort === "space") list = [...list].sort((a, b) => b.area - a.area);
   return (
     <>
-      <section className="hero">
-        <div className="hero-copy">
-          <div className="eyebrow">
-            <span className="tiny-dot" /> ПРОСТРАНСТВА ДЛЯ ВАШИХ ИДЕЙ
-          </div>
-          <h1>
-            Ваш следующий
-            <br />
-            кадр начинается
-            <br />
-            <span>здесь.</span>
-            <span className="title-star">✳</span>
-          </h1>
-          <p>
-            Локации с характером в Астане.
-            <br />
-            Найдите свою, выберите время — и создавайте.
-          </p>
-          <a href="#locations" className="button primary">
-            Найти пространство <Icon name="arrow" />
-          </a>
-          <div className="hero-note">
-            <span className="stacked">
-              <Icon name="camera" size={18} />
-              <Icon name="grid" size={18} />
-              <Icon name="pin" size={18} />
-            </span>
-            <span>
-              5 разных пространств.
-              <br />
-              <b>Одна ваша история.</b>
-            </span>
-          </div>
+      <section className="discovery-hero" aria-labelledby="discovery-title">
+        <img className="discovery-photo" src="/images/garden.jpg" alt="Зелёное пространство Secret Garden" fetchPriority="high" />
+        <div className="discovery-content">
+          <div className="eyebrow">АСТАНА · ПРОСТРАНСТВА ДЛЯ СЪЁМКИ</div>
+          <h1 id="discovery-title">Найдите место.<br />Создайте <em>свою историю.</em></h1>
+          <p>Светлые студии, городские крыши и тихие сады.<br />Выберите пространство для вашего следующего кадра.</p>
+          <form className="discovery-search" onSubmit={findSpaces}>
+            <label><span>Локация</span><select value={heroType} onChange={e => setHeroType(e.target.value)}>{categories.map(c => <option key={c}>{c}</option>)}</select></label>
+            <label><span>Дата съёмки</span><input type="date" min={astanaDate()} max={astanaDate(90)} value={searchDate} onChange={e => setSearchDate(e.target.value)} aria-label="Дата съёмки" /></label>
+            <label><span>Длительность</span><select value={searchDuration} onChange={e => setSearchDuration(Number(e.target.value))}>{[1,2,3,4,5,6,7,8].map(n => <option key={n} value={n}>{n} ч</option>)}</select></label>
+            <button className="button primary" disabled={finding || !locations.length}>{finding ? "Проверяем…" : "Найти место"}<Icon name="diagonal" /></button>
+          </form>
+          {findError && <div className="discovery-error" role="alert">{findError}</div>}
         </div>
-        <div className="hero-visual">
-          <img
-            src="/images/hero.svg"
-            alt="Светлое творческое пространство для съёмки"
-            fetchPriority="high"
-          />
-          <span className="image-tag">
-            <span className="tiny-dot" /> СВЕТ. ФАКТУРА. ВДОХНОВЕНИЕ.
-          </span>
-          <div className="hero-photo-label">
-            <span>Найдите свой ракурс</span>
-            <a href="#locations" aria-label="Перейти к локациям">
-              <Icon name="diagonal" size={26} />
-            </a>
-          </div>
-          <span className="vertical-caption">
-            ASTANA, KAZAKHSTAN · 51°10′ N
-          </span>
-        </div>
+        <span className="discovery-caption">Secret Garden · демонстрационная локация</span>
       </section>
-      <div className="trust-strip">
-        <span>
-          <Icon name="clock" />
-          Аренда от 1 часа
-        </span>
-        <span>
-          <Icon name="calendar" />
-          Актуальное расписание
-        </span>
-        <span>
-          <Icon name="check" />
-          Прозрачная стоимость
-        </span>
-        <span>
-          <Icon name="camera" />
-          Для фото, видео и контента
-        </span>
+      <div className="discovery-facts">
+        <span><b>{locations.length || "—"}</b> пространств в каталоге</span>
+        <span><b>от 1 часа</b> аренда локации</span>
+        <span><b>₸</b> стоимость до отправки заявки</span>
       </div>
       <section id="locations" className="catalog section">
         <div className="section-heading">
           <div>
-            <div className="eyebrow">01 / ВАШЕ ПРОСТРАНСТВО</div>
+            <div className="eyebrow">МЕСТО ДЛЯ ВАШЕЙ ИДЕИ</div>
             <h2>
-              У каждой идеи —<br />
-              своё место<span className="orange">.</span>
+              Откройте свой ракурс
             </h2>
           </div>
           <p>
-            От чистого холста до городской фактуры.
-            <br />
-            Выберите фон для вашей истории.
+            У каждого пространства — свой характер.<br />
+            Найдите тот, который подходит вам.
           </p>
         </div>
         <div className="catalog-tools">
@@ -230,8 +207,10 @@ function Home({ locations, error, retry }) {
           <span>
             {list.length} {spacesLabel(list.length)}
           </span>
-          <span>Цены за час · время Астаны</span>
+          <span>{appliedDate ? `Свободные часы на ${dateLabel(appliedDate)} · ${appliedDuration} ч` : "Цены за час · время Астаны"}</span>
         </div>
+        {appliedDate && <button className="clear-date" onClick={() => { setAvailableIds(null); setAppliedDate(""); setSearchDate(""); }}>Сбросить поиск по дате ×</button>}
+        <div aria-live="polite" className="sr-only">Найдено: {list.length}</div>
         {error ? (
           <>
             <ErrorBox>{error}</ErrorBox>
@@ -250,7 +229,7 @@ function Home({ locations, error, retry }) {
               className="button"
               onClick={() => {
                 setSearch("");
-                setFilter("Все локации");
+                setFilter("Все локации"); setHeroType("Все локации"); setAvailableIds(null); setAppliedDate(""); setSearchDate("");
               }}
             >
               Сбросить фильтры
@@ -260,7 +239,7 @@ function Home({ locations, error, retry }) {
           <div className="location-grid">
             {list.map((loc, i) => (
               <Link
-                to={`/locations/${loc.id}`}
+                to={`/locations/${loc.id}${appliedDate ? `?date=${appliedDate}&duration=${appliedDuration}` : ""}`}
                 key={loc.id}
                 className="location-card"
               >
@@ -374,8 +353,11 @@ function Home({ locations, error, retry }) {
 }
 
 function LocationDetail({ location, index }) {
-  const [date, setDate] = useState(astanaDate(1));
-  const [duration, setDuration] = useState(1);
+  const params = new URLSearchParams(window.location.search);
+  const requestedDate = params.get("date") || "";
+  const initialDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) && requestedDate >= astanaDate() && requestedDate <= astanaDate(90) ? requestedDate : astanaDate(1);
+  const [date, setDate] = useState(initialDate);
+  const [duration, setDuration] = useState(/^[1-8]$/.test(params.get("duration") || "") ? Number(params.get("duration")) : 1);
   const [slots, setSlots] = useState([]);
   const [time, setTime] = useState("");
   const [loading, setLoading] = useState(true);
@@ -886,7 +868,7 @@ function App() {
     <>
       <Header path={path} />
       <main id="main">
-        {path === "/admin" ? (
+        {["/login", "/register", "/verify-phone", "/profile"].includes(path) ? (<Auth path={path} />) : path === "/admin" ? (
           <Admin locations={locations} />
         ) : status ? (
           <BookingStatus key={status[1]} token={status[1]} />

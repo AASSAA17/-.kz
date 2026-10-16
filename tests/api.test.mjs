@@ -1,106 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createServer } from "node:http";
-import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { createApp, addBusinessHours } from "../server/app.mjs";
-
-const PASSWORD = "test-only-password-7!";
-const AT = Date.parse("2026-09-25T10:00:00+05:00");
-const input = (overrides = {}) => ({
-  locationId: "loft",
-  date: "2026-09-26",
-  startTime: "10:00",
-  duration: 2,
-  name: "Тестовый клиент",
-  phone: "+7 (777) 123-45-67",
-  comment: "Тестовая съёмка",
-  consent: true,
-  ...overrides,
-});
-
-async function fixture(t, options = {}) {
-  const dir = await mkdtemp(join(tmpdir(), "semka-api-test-"));
-  let currentTime = AT;
-  let app;
-  let server;
-  let base;
-  const dbPath = join(dir, "db.sqlite");
-  const start = async () => {
-    app = createApp({
-      adminPassword: PASSWORD,
-      dbPath,
-      now: () => currentTime,
-      staticDir: join(dir, "dist"),
-      ...options,
-    });
-    server = createServer(app.handler);
-    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-    base = `http://127.0.0.1:${server.address().port}`;
-  };
-  const stop = async () => {
-    server.closeIdleConnections();
-    await new Promise((resolve) => server.close(resolve));
-    app.close();
-  };
-  await start();
-  t.after(async () => {
-    await stop();
-    await rm(dir, { recursive: true, force: true });
-  });
-  const api = async (
-    path,
-    { method = "GET", body, cookie, key, headers = {} } = {},
-  ) => {
-    const response = await fetch(base + path, {
-      method,
-      headers: {
-        ...(!["GET", "HEAD"].includes(method) ? { Origin: base } : {}),
-        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-        ...(cookie ? { Cookie: cookie } : {}),
-        ...(key ? { "Idempotency-Key": key } : {}),
-        ...headers,
-      },
-      ...(body !== undefined
-        ? { body: typeof body === "string" ? body : JSON.stringify(body) }
-        : {}),
-    });
-    const data = await response.json();
-    return { status: response.status, data, headers: response.headers };
-  };
-  const book = (body = input(), key = randomUUID()) =>
-    api("/api/bookings", { method: "POST", body, key });
-  const login = async () => {
-    const response = await api("/api/admin/login", {
-      method: "POST",
-      body: { password: PASSWORD },
-    });
-    assert.equal(response.status, 200);
-    return response.headers.get("set-cookie").split(";")[0];
-  };
-  return {
-    api,
-    book,
-    login,
-    dir,
-    dbPath,
-    get base() {
-      return base;
-    },
-    get app() {
-      return app;
-    },
-    setTime(value) {
-      currentTime = typeof value === "number" ? value : Date.parse(value);
-    },
-    async restart() {
-      await stop();
-      await start();
-    },
-  };
-}
+import { addBusinessHours } from "../server/app.mjs";
+import { AT, PASSWORD, input, fixture } from "./helpers.mjs";
 
 test("catalogue and booking survive a database reopen; public receipt hides customer details", async (t) => {
   const f = await fixture(t);
@@ -241,7 +145,7 @@ test("admin authentication, secure session storage, TTL and logout are enforced"
   assert.match(setCookie, /Max-Age=28800/);
   const cookie = setCookie.split(";")[0];
   const raw = cookie.split("=")[1];
-  const session = f.app.db.prepare("SELECT * FROM sessions").get();
+  const session = await f.app.db.prepare("SELECT * FROM sessions").get();
   assert.notEqual(session.token_hash, raw);
   assert.equal(
     (await f.api("/api/admin/session", { cookie })).data.authenticated,

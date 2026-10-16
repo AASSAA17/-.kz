@@ -49,4 +49,4 @@ export function navigate(path) {
   window.scrollTo({ top: 0 });
 }
 export const locationImage = (loc) =>
-  loc.image || `/images/${loc.slug || loc.id}.svg`;
+  `/images/${loc.slug || loc.id}.jpg`;

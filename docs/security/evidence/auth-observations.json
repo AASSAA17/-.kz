@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-16",
+  "environment": "isolated in-memory SQLite, synthetic account; no live user data changed",
+  "registrationStatus": 201,
+  "invalidLoginStatuses": [
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    401
+  ],
+  "expectedSeventhLogin": 429,
+  "actualRateLimitRows": 0,
+  "wrongVerificationAttemptsStored": 0,
+  "expectedStoredAttempts": "at least 5",
+  "finding": "Thrown HttpError rolls back failure counters inside transaction; counter persistence needs correction",
+  "realSmsDeliveryTested": false
+}

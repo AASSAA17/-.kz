@@ -13,6 +13,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const envPath = resolve(root, '.env');
 const password = randomBytes(24).toString('base64url');
 let handle;
+let fileEnvironment = {};
 
 try {
   // wx creates a new file and fails if one already exists.
@@ -20,13 +21,14 @@ try {
 } catch (error) {
   if (error.code !== 'EEXIST') throw error;
   const existing = await readFile(envPath, 'utf8');
+  fileEnvironment = parseEnv(existing);
   console.log('Файл .env уже существует. Его значения сохранены без изменений.');
-  const existingLength = (parseEnv(existing).ADMIN_PASSWORD || '').length;
+  const existingLength = (process.env.ADMIN_PASSWORD ?? fileEnvironment.ADMIN_PASSWORD ?? '').length;
   if (existingLength < 12 || existingLength > 256) {
     console.error('Укажите ADMIN_PASSWORD длиной от 12 до 256 символов в существующем .env перед запуском сервера.');
     process.exitCode = 1;
   } else {
-    console.log('Пароль администратора находится в .env, строка ADMIN_PASSWORD.');
+    console.log(process.env.ADMIN_PASSWORD ? 'Используется ADMIN_PASSWORD из окружения процесса.' : 'Пароль администратора находится в .env, строка ADMIN_PASSWORD.');
   }
 }
 
@@ -46,3 +48,9 @@ if (handle) {
   console.log('Сохраните пароль. Он также доступен в .env, строка ADMIN_PASSWORD.');
   console.log('Далее: npm run dev → http://localhost:5173');
 }
+
+// Report the selected storage without printing credentials or opening a database.
+const databaseUrl = process.env.DATABASE_URL ?? fileEnvironment.DATABASE_URL;
+console.log(databaseUrl
+  ? 'Хранение: PostgreSQL через DATABASE_URL. SQLite-файл не требуется.'
+  : 'Хранение: локальный SQLite. Для хостинга задайте DATABASE_URL в окружении сервера.');

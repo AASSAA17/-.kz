@@ -1,0 +1,207 @@
+{
+  "date": "2026-10-16",
+  "probabilitiesAreAssumptions": true,
+  "risks": [
+    {
+      "id": "R01",
+      "description": "Егер DB қосылмаса, сайт өтінім қабылдай алмайды",
+      "probability": 0.25,
+      "impactHours": 8,
+      "owner": "Адильжан",
+      "strategy": "Төмендету",
+      "trigger": "health 503 немесе connection refused",
+      "mitigation": "DB runbook және іске қосу тексерісі"
+    },
+    {
+      "id": "R02",
+      "description": "Егер диск не база бұзылса, броньдар жоғалады",
+      "probability": 0.15,
+      "impactHours": 16,
+      "owner": "Адильжан",
+      "strategy": "Төмендету",
+      "trigger": "backup 24 сағаттан ескі немесе restore қатесі",
+      "mitigation": "pg_dump және тесттік қалпына келтіру"
+    },
+    {
+      "id": "R03",
+      "description": "Егер екі өтінім бір слотқа өтсе, студияда конфликт болады",
+      "probability": 0.1,
+      "impactHours": 12,
+      "owner": "Адильжан",
+      "strategy": "Төмендету",
+      "trigger": "Бір локацияда қабаттасқан confirmed өтінімдер",
+      "mitigation": "Транзакциялық блоктар және race тесттері"
+    },
+    {
+      "id": "R04",
+      "description": "Егер нақты байланыс деректері ашылса, клиент құпиялығы бұзылады",
+      "probability": 0.15,
+      "impactHours": 20,
+      "owner": "Арсен",
+      "strategy": "Төмендету",
+      "trigger": "Рұқсатсыз жауапта name немесе phone өрісі",
+      "mitigation": "Рұқсат тексерісі және анонимді демонстрация"
+    },
+    {
+      "id": "R05",
+      "description": "Егер жаңа талаптар қосылса, бекітілген мерзім жылжиды",
+      "probability": 0.4,
+      "impactHours": 12,
+      "owner": "Арсен",
+      "strategy": "Болдырмау",
+      "trigger": "Бекітілген он тарихшадан тыс жаңа міндет",
+      "mitigation": "Көлем алмасуы немесе қайта бағалау"
+    },
+    {
+      "id": "R06",
+      "description": "Егер оқу жүктемесі өссе, команда capacity төмендейді",
+      "probability": 0.4,
+      "impactHours": 10,
+      "owner": "Арсен",
+      "strategy": "Төмендету",
+      "trigger": "Екі күн қатарынан жоспарланған жұмыс орындалмады",
+      "mitigation": "Апталық қайта жоспарлау"
+    },
+    {
+      "id": "R07",
+      "description": "Егер user login лимиттері түзетілмесе, парольді шексіз тексеру мүмкін",
+      "probability": 0.35,
+      "impactHours": 8,
+      "owner": "Адильжан",
+      "strategy": "Төмендету",
+      "trigger": "SEC-01 acceptance тесті өтпеді",
+      "mitigation": "SEC-01 және қайта іске қосу тесті"
+    },
+    {
+      "id": "R08",
+      "description": "Егер dev кодпен телефон расталуы production-ға өтсе, иелік расталмайды",
+      "probability": 0.25,
+      "impactHours": 12,
+      "owner": "Адильжан",
+      "strategy": "Болдырмау",
+      "trigger": "Provider жоқ кезде production verify қабылданды",
+      "mitigation": "SEC-02 production fail-closed"
+    },
+    {
+      "id": "R09",
+      "description": "Егер UI мен API форматы ажыраса, өтінім жіберілмейді",
+      "probability": 0.2,
+      "impactHours": 8,
+      "owner": "Арсен",
+      "strategy": "Төмендету",
+      "trigger": "Сквозной сценарийде 4xx не JS қатесі",
+      "mitigation": "Контракт және браузерлік тексеріс"
+    },
+    {
+      "id": "R10",
+      "description": "Егер браузер уақыты қате қолданылса, слот басқа күнге түседі",
+      "probability": 0.2,
+      "impactHours": 6,
+      "owner": "Арсен",
+      "strategy": "Төмендету",
+      "trigger": "Интерфейс күні API күнінен өзгеше",
+      "mitigation": "Астана уақыты және шекаралық тесттер"
+    },
+    {
+      "id": "R11",
+      "description": "Егер экран тар болса, негізгі батырма қолжетімсіз болады",
+      "probability": 0.15,
+      "impactHours": 6,
+      "owner": "Арсен",
+      "strategy": "Төмендету",
+      "trigger": "390px экранында горизонталь scroll",
+      "mitigation": "Мобильді QA және клавиатура тексерісі"
+    },
+    {
+      "id": "R12",
+      "description": "Егер тәуелділікте CVE болса, шабуыл беті ұлғаяды",
+      "probability": 0.25,
+      "impactHours": 8,
+      "owner": "Адильжан",
+      "strategy": "Төмендету",
+      "trigger": "Trivy HIGH немесе CRITICAL табады",
+      "mitigation": "Тәуелділіктерді талдау және жаңарту"
+    },
+    {
+      "id": "R13",
+      "description": "Егер құпия Git тарихына түссе, базаға бөтен адам кіруі мүмкін",
+      "probability": 0.15,
+      "impactHours": 16,
+      "owner": "Адильжан",
+      "strategy": "Болдырмау",
+      "trigger": "Gitleaks valid secret анықтайды",
+      "mitigation": "Кілтті ауыстыру және тарихты тексеру"
+    },
+    {
+      "id": "R14",
+      "description": "Егер әкімші парольі жоғалса, өтінімдер өңделмейді",
+      "probability": 0.1,
+      "impactHours": 4,
+      "owner": "Адильжан",
+      "strategy": "Төмендету",
+      "trigger": "Әкімші екі рет кіре алмады",
+      "mitigation": "Жергілікті қалпына келтіру нұсқауы"
+    },
+    {
+      "id": "R15",
+      "description": "Егер келісім мәтіні бекітілмесе, нақты пайдаланушыларды қосу тежеледі",
+      "probability": 0.3,
+      "impactHours": 6,
+      "owner": "Арсен",
+      "strategy": "Болдырмау",
+      "trigger": "Нақты деректерді жинау басталады, саясат жоқ",
+      "mitigation": "SEC-03 келісім және retention жоспары"
+    },
+    {
+      "id": "R16",
+      "description": "Егер ноутбук ұйқыға кетсе, көрсетілім үзіледі",
+      "probability": 0.25,
+      "impactHours": 2,
+      "owner": "Арсен",
+      "strategy": "Қабылдау",
+      "trigger": "health жауап бермейді және ноутбук sleep күйінде",
+      "mitigation": "Қайта іске қосу және резервті видео жоспары"
+    },
+    {
+      "id": "R17",
+      "description": "Егер internet үзілсе, сыртқы интеграция істемейді",
+      "probability": 0.2,
+      "impactHours": 4,
+      "owner": "Адильжан",
+      "strategy": "Төмендету",
+      "trigger": "Provider timeout немесе offline",
+      "mitigation": "Түсінікті қате және localhost көрсету"
+    },
+    {
+      "id": "R18",
+      "description": "Егер қалдық WBS резерві жеткіліксіз болса, демо кешігеді",
+      "probability": 0.3,
+      "impactHours": 6,
+      "owner": "Арсен",
+      "strategy": "Төмендету",
+      "trigger": "Бос резерв 4 сағаттан аз",
+      "mitigation": "EMV негізінде scope қайта қарау"
+    },
+    {
+      "id": "R19",
+      "description": "Егер snapshot нұсқасы ескірсе, қалпына келтіру дерек жоғалтады",
+      "probability": 0.15,
+      "impactHours": 8,
+      "owner": "Адильжан",
+      "strategy": "Төмендету",
+      "trigger": "Backup-тан кейін 24 сағаттан көп жазба бар",
+      "mitigation": "RPO және backup журналы"
+    },
+    {
+      "id": "R20",
+      "description": "Егер жеке сілтеме жарияланса, бөтен адам өтінім мәртебесін көреді",
+      "probability": 0.2,
+      "impactHours": 4,
+      "owner": "Арсен",
+      "strategy": "Төмендету",
+      "trigger": "Booking URL жалпы чатқа жіберілді",
+      "mitigation": "Сілтеме құпиялығы туралы ескерту және revoke жоспары"
+    }
+  ],
+  "totalEmvHours": 38.6
+}
