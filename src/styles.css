@@ -9,6 +9,10 @@
   --muted: #6c6d64;
   --dark: #262a23;
 }
+.profile-section { max-width: 1080px; margin: auto; min-height: 60vh; }
+.profile-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.profile-bookings { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 16px; margin: 24px 0; }
+.profile-booking { padding: 24px; background: white; border: 1px solid var(--line); border-radius: 14px; }
 * {
   box-sizing: border-box;
 }

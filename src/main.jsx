@@ -16,6 +16,12 @@ import "./design.css";
 
 function Header({ path }) {
   const [menu, setMenu] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
+  useEffect(() => {
+    let active = true;
+    api("/auth/session").then(d => { if (active) setSignedIn(d.authenticated); }).catch(() => { if (active) setSignedIn(false); });
+    return () => { active = false; };
+  }, [path]);
   useEffect(() => setMenu(false), [path]);
   return (
     <>
@@ -43,15 +49,14 @@ function Header({ path }) {
           </Link>
           <Link to="/#how">Как это работает</Link>
           <Link to="/#about">О проекте</Link>
-          <Link to="/register" className="mobile-registration">Регистрация</Link>
+          <Link to={signedIn ? "/profile" : "/login"} className="mobile-registration">{signedIn ? "Мои заявки" : "Войти"}</Link>
         </nav>
         <div className="header-right">
           <span className="city">
             <Icon name="pin" size={15} />
             Астана
           </span>
-          <Link to="/login" className="admin-link">Войти</Link>
-          <Link to="/register" className="admin-link">Регистрация</Link>
+          <Link to={signedIn ? "/profile" : "/login"} className="admin-link">{signedIn ? "Мои заявки" : "Войти"}</Link>
         </div>
       </header>
     </>
@@ -68,6 +73,7 @@ function Footer() {
       <Link to="/admin">
         Кабинет студии <Icon name="diagonal" size={14} />
       </Link>
+      <a href="/team.html">Команда проекта</a>
     </footer>
   );
 }

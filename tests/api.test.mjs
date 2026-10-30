@@ -399,6 +399,10 @@ test("static frontend routes work without exposing source files or dotfiles", as
     "<!doctype html><title>MVP</title>",
   );
   await writeFile(join(f.dir, "dist/.env"), "SECRET=bad");
+  await writeFile(join(f.dir, "dist/flow-core.mjs"), "export const ready = true;");
+  const module = await fetch(f.base + "/flow-core.mjs");
+  assert.equal(module.status, 200);
+  assert.match(module.headers.get("content-type"), /^text\/javascript/);
   const route = await fetch(f.base + "/booking/receipt");
   assert.equal(route.status, 200);
   assert.match(await route.text(), /MVP/);

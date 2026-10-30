@@ -54,4 +54,5 @@ footer .brand-dot {color:#f17d59;}
 @media(max-width:500px){.header-right .admin-link:last-child{display:none;}.discovery-content h1{font-size:40px;}.discovery-content .eyebrow{font-size:9px;letter-spacing:1.8px;}.location-grid{grid-template-columns:1fr;}.card-image img{height:265px;}.card-body>p{min-height:0;}.discovery-search input,.discovery-search select{font-size:16px;}.catalog.section{padding-top:45px;}footer{gap:22px;padding:32px 5%;}}
 footer .brand { color:#f8faf5; }
 .mobile-registration {display:none;}
+.site-header .header-right .admin-link:last-child {display:flex;}
 @media(max-width:760px){.site-header nav.open .mobile-registration{display:block;}}

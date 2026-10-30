@@ -456,6 +456,7 @@ export async function createApp({
       return send(res, 200, { date, slots, closingTime: "21:00" });
     }
     if (method === "POST" && path === "/api/bookings") {
+      const bookingUser = await userSession(req);
       const key = req.headers["idempotency-key"];
       if (typeof key !== "string" || !UUID.test(key))
         fail(
@@ -492,6 +493,7 @@ export async function createApp({
         );
       // Stable normalized intent allows retries after the original hold has expired.
       const payload = {
+        ...(bookingUser ? { userId: bookingUser.id } : {}),
         locationId: loc.id,
         date: body.date,
         startTime: body.startTime,
@@ -538,8 +540,8 @@ export async function createApp({
           const expires = iso(addBusinessHours(at, HOLD_TTL / HOUR));
           await tx
             .prepare(
-              `INSERT INTO bookings(id,public_token,location_id,date,start_time,end_time,duration,name,phone,comment,total_price,status,expires_at,created_at,updated_at,consent_at)
-          VALUES(?,?,?,?,?,?,?,?,?,?,?,'pending',?,?,?,?)`,
+              `INSERT INTO bookings(id,public_token,location_id,date,start_time,end_time,duration,name,phone,comment,total_price,status,expires_at,created_at,updated_at,consent_at,user_id)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,'pending',?,?,?,?,?)`,
             )
             .run(
               id,
@@ -557,6 +559,7 @@ export async function createApp({
               iso(at),
               iso(at),
               iso(at),
+              bookingUser?.id ?? null,
             );
           await tx
             .prepare(
@@ -603,6 +606,12 @@ export async function createApp({
         );
       return send(res, 200, { booking: publicBooking(booking) });
     }
+    if (method === "GET" && path === "/api/auth/config") {
+      return send(res, 200, { registrationEnabled: !production, verificationMode: production ? "unavailable" : "local-demo" });
+    }
+    if (method === "POST" && ["/api/auth/register", "/api/auth/verify-phone"].includes(path) && production) {
+      fail(503, "Регистрация временно недоступна: SMS-подтверждение ещё не подключено. Вы можете оформить заявку без аккаунта.", "SMS_UNAVAILABLE");
+    }
     if (method === "POST" && path === "/api/auth/register") {
       const body = await jsonBody(req);
       const firstName = textField(body.firstName, "Имя", { min: 2, max: 60 });
@@ -632,21 +641,22 @@ export async function createApp({
     if (method === "POST" && path === "/api/auth/verify-phone") {
       const body = await jsonBody(req); const email = textField(body.email, "Email", { min: 5, max: 254 }).toLowerCase();
       const code = textField(body.code, "Код", { min: 6, max: 6 }); if (!/^\d{6}$/.test(code)) fail(400, "Код состоит из шести цифр.", "INVALID_CODE");
-      const at = now(); const user = await db.transaction(async (tx) => {
+      const at = now(); const result = await db.transaction(async (tx) => {
         const account = await tx.prepare("SELECT * FROM users WHERE email=?").get(email); const verification = account && await tx.prepare("SELECT * FROM phone_verifications WHERE user_id=?").get(account.id);
         if (!account || !verification || verification.expires_at <= at || verification.attempts >= 5 || !timingSafeEqual(Buffer.from(verification.code_hash), Buffer.from(digest(`${account.id}:${code}`)))) {
           if (verification) await tx.prepare("UPDATE phone_verifications SET attempts=attempts+1 WHERE user_id=?").run(account.id);
-          fail(400, "Код недействителен или срок его действия истёк.", "INVALID_CODE");
+          return { invalid: true };
         }
         await tx.prepare("UPDATE users SET phone_verified_at=?,updated_at=? WHERE id=?").run(iso(at), iso(at), account.id);
         await tx.prepare("DELETE FROM phone_verifications WHERE user_id=?").run(account.id);
-        await tx.prepare("INSERT INTO audit_events(user_id,action,detail,created_at) VALUES(?,?,?,?)").run(account.id, "phone_verified", "Телефон подтверждён", iso(at)); return account;
+        await tx.prepare("INSERT INTO audit_events(user_id,action,detail,created_at) VALUES(?,?,?,?)").run(account.id, "phone_verified", "Локальное демонстрационное подтверждение; SMS не отправлялось", iso(at)); return { user: account };
       }, ["verify:" + digest(email)]);
-      return send(res, 200, { ok: true, email: user.email });
+      if (result.invalid) fail(400, "Код недействителен или срок его действия истёк.", "INVALID_CODE");
+      return send(res, 200, { ok: true, email: result.user.email });
     }
     if (method === "POST" && path === "/api/auth/login") {
       const body = await jsonBody(req); const email = textField(body.email, "Email", { min: 5, max: 254 }).toLowerCase();
-      const password = typeof body.password === "string" ? body.password : ""; const at = now();
+      const password = typeof body.password === "string" && body.password.length <= 128 ? body.password : ""; const at = now();
       const ip = req.socket.remoteAddress || "unknown"; const accountKey = `login:email:${digest(email)}`; const ipKey = `login:ip:${digest(ip)}`;
       const result = await db.transaction(async (tx) => {
         for (const key of [accountKey, ipKey]) { const limit = await tx.prepare("SELECT failures,reset_at FROM auth_rate_limits WHERE throttle_key=?").get(key); if (limit && limit.reset_at > at && limit.failures >= 5) fail(429, "Слишком много попыток. Попробуйте позже.", "RATE_LIMIT"); }
@@ -655,18 +665,27 @@ export async function createApp({
         const expected = user ? Buffer.from(user.password_hash, "hex") : randomBytes(64);
         const valid = Boolean(user) && expected.length === received.length && timingSafeEqual(expected, received);
         if (!valid || !user.phone_verified_at) {
-          for (const key of [accountKey, ipKey]) { const old = await tx.prepare("SELECT failures,reset_at FROM auth_rate_limits WHERE throttle_key=?").get(key); const failures = old && old.reset_at > at ? old.failures + 1 : 1; await tx.prepare("INSERT INTO auth_rate_limits(throttle_key,failures,reset_at) VALUES(?,?,?) ON CONFLICT(throttle_key) DO UPDATE SET failures=excluded.failures,reset_at=excluded.reset_at").run(key, failures, at + LIMIT_WINDOW); }
-          fail(401, "Не удалось войти. Проверьте данные и подтверждение телефона.", "LOGIN_FAILED");
+          for (const key of [accountKey, ipKey]) { const old = await tx.prepare("SELECT failures,reset_at FROM auth_rate_limits WHERE throttle_key=?").get(key); const active = old && old.reset_at > at; const failures = active ? old.failures + 1 : 1; await tx.prepare("INSERT INTO auth_rate_limits(throttle_key,failures,reset_at) VALUES(?,?,?) ON CONFLICT(throttle_key) DO UPDATE SET failures=excluded.failures,reset_at=excluded.reset_at").run(key, failures, active ? old.reset_at : at + LIMIT_WINDOW); }
+          return { invalid: true };
         }
         for (const key of [accountKey, ipKey]) await tx.prepare("DELETE FROM auth_rate_limits WHERE throttle_key=?").run(key);
         const token = randomBytes(32).toString("hex"); await tx.prepare("INSERT INTO user_sessions(token_hash,user_id,expires_at,created_at) VALUES(?,?,?,?)").run(digest(token), user.id, at + SESSION_TTL, iso(at));
         return { token, user };
       }, [accountKey, ipKey]);
+      if (result.invalid) fail(401, "Не удалось войти. Проверьте данные и подтверждение телефона.", "LOGIN_FAILED");
       setUserCookie(res, result.token, req); return send(res, 200, { user: { id: result.user.id, firstName: result.user.first_name, lastName: result.user.last_name, email: result.user.email, role: result.user.role } });
     }
     if (method === "GET" && path === "/api/auth/session") { const user = await userSession(req); return send(res, 200, { authenticated: Boolean(user), user: user && { id: user.id, firstName: user.first_name, lastName: user.last_name, email: user.email, phone: user.phone, role: user.role } }); }
     if (method === "POST" && path === "/api/auth/logout") { const tokenHash = userTokenHash(req); if (tokenHash) await db.prepare("DELETE FROM user_sessions WHERE token_hash=?").run(tokenHash); setUserCookie(res, "", req, 0); return send(res, 200, { ok: true }); }
     if (method === "GET" && path === "/api/profile") { const user = await requireUser(req); return send(res, 200, { user: { id: user.id, firstName: user.first_name, lastName: user.last_name, email: user.email, phone: user.phone, role: user.role } }); }
+    if (method === "GET" && path === "/api/profile/bookings") {
+      const user = await requireUser(req);
+      const rows = await db.prepare("SELECT id,location_id,date FROM bookings WHERE user_id=?").all(user.id);
+      // Use the same inventory locks as public reads and mutations when expiring holds.
+      for (const row of rows) await db.transaction(tx => expire(tx, row.location_id, row.date), [inventoryKey(row.location_id, row.date)]);
+      const bookings = await db.prepare("SELECT * FROM bookings WHERE user_id=? ORDER BY created_at DESC,id").all(user.id);
+      return send(res, 200, { bookings: bookings.map(publicBooking) });
+    }
     if (method === "GET" && path === "/api/admin/session")
       return send(res, 200, { authenticated: Boolean(await session(req)) });
     if (method === "POST" && path === "/api/admin/login") {
@@ -919,6 +938,7 @@ export async function createApp({
   const mime = {
     ".html": "text/html; charset=utf-8",
     ".js": "text/javascript; charset=utf-8",
+    ".mjs": "text/javascript; charset=utf-8",
     ".css": "text/css; charset=utf-8",
     ".svg": "image/svg+xml",
     ".png": "image/png",
@@ -980,7 +1000,8 @@ export async function createApp({
       );
       res.setHeader(
         "Cache-Control",
-        extname(file) === ".html" ? "no-cache" : "public, max-age=3600",
+        /\.(html|mjs|json)$/.test(file) || ["/team.css", "/flow-style.css"].includes(decoded)
+          ? "no-cache" : "public, max-age=3600",
       );
       if (req.method === "HEAD") return res.end();
       res.end(await readFile(file));
