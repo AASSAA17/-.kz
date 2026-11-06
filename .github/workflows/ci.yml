@@ -33,6 +33,9 @@ jobs:
         run: npm run lint
       - name: Run API tests
         run: npm test
+      - name: Measure server test coverage
+        if: runner.os == 'Linux'
+        run: node --experimental-test-coverage --test --test-coverage-include="server/*.mjs" tests/api.test.mjs tests/auth.test.mjs tests/flow.test.mjs
       - name: Build frontend
         run: npm run build
       - name: Scan npm lockfile with OSV-Scanner
@@ -79,9 +82,25 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql://semka:ci-only@127.0.0.1:5432/semka_test?sslmode=disable
 
+  secrets:
+    name: Secret leakage scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Scan Git history for secrets
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: 'false'
+          GITLEAKS_ENABLE_COMMENTS: 'false'
+
   artifact:
     name: Publish verified frontend
-    needs: [test-and-build, postgres]
+    needs: [test-and-build, postgres, secrets]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
