@@ -132,6 +132,53 @@ function durationValue(value) {
   return value;
 }
 
+function availabilityQuery(params, at) {
+  const date = validateDate(params.get("date"), at);
+  const rawDuration = params.get("duration") || "1";
+  if (!/^[1-8]$/.test(rawDuration))
+    fail(400, "Длительность съёмки — от 1 до 8 целых часов.", "INVALID_DURATION");
+  return { date, duration: Number(rawDuration) };
+}
+
+function availableSlots(date, duration, at, occupied) {
+  const slots = [];
+  for (let hour = 9; hour + duration <= 21; hour++) {
+    const time = String(hour).padStart(2, "0") + ":00";
+    const end = String(hour + duration).padStart(2, "0") + ":00";
+    slots.push({
+      time,
+      available: startMillis(date, time) > at &&
+        !occupied.some((item) => item.start_time < end && item.end_time > time),
+    });
+  }
+  return slots;
+}
+
+function sendCalendar(res, row) {
+  const booking = publicBooking(row);
+  const timestamp = (ms) => iso(ms).replace(/[-:]|\.\d{3}/g, "");
+  const name = booking.locationName.replace(/\\/g, "\\\\")
+    .replace(/\r\n|\r|\n/g, "\\n").replace(/[,;]/g, "\\$&");
+  res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+  res.setHeader("Content-Disposition", 'attachment; filename="semka-booking.ics"');
+  res.setHeader("Cache-Control", "no-store");
+  res.end([
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Semka.kz//Booking//EN",
+    "BEGIN:VEVENT",
+    "UID:" + booking.id + "@semka.kz",
+    "DTSTAMP:" + timestamp(Date.parse(row.updated_at)),
+    "DTSTART:" + timestamp(startMillis(booking.date, booking.startTime)),
+    "DTEND:" + timestamp(startMillis(booking.date, booking.endTime)),
+    "SUMMARY:Semka.kz - " + name,
+    "STATUS:CONFIRMED",
+    "END:VEVENT",
+    "END:VCALENDAR",
+    "",
+  ].join("\r\n"));
+}
+
 function interval(body, now) {
   const date = validateDate(body.date, now);
   const duration = durationValue(body.duration);
@@ -414,21 +461,31 @@ export async function createApp({
     }
     if (method === "GET" && path === "/api/locations")
       return send(res, 200, { locations });
+    if (method === "GET" && path === "/api/locations/availability") {
+      const at = now();
+      const { date, duration } = availabilityQuery(url.searchParams, at);
+      // Search is a snapshot. Booking writes still check conflicts under lock.
+      const occupied = await db.prepare(
+        "SELECT location_id,start_time,end_time FROM bookings WHERE date=? AND status IN ('pending','confirmed') AND (status='confirmed' OR expires_at>?) UNION ALL SELECT location_id,start_time,end_time FROM blocks WHERE date=?",
+      ).all(date, iso(at), date);
+      const byLocation = Map.groupBy(occupied, (item) => item.location_id);
+      return send(res, 200, {
+        date,
+        duration,
+        locations: locations.map(({ id }) => ({
+          id,
+          times: availableSlots(date, duration, at, byLocation.get(id) ?? [])
+            .filter((slot) => slot.available).map((slot) => slot.time),
+        })),
+      });
+    }
     const availability = path.match(
       /^\/api\/locations\/([^/]+)\/availability$/,
     );
     if (method === "GET" && availability) {
       const loc = location(availability[1]);
       const at = now();
-      const date = validateDate(url.searchParams.get("date"), at);
-      const rawDuration = url.searchParams.get("duration") || "1";
-      if (!/^[1-8]$/.test(rawDuration))
-        fail(
-          400,
-          "Длительность съёмки — от 1 до 8 целых часов.",
-          "INVALID_DURATION",
-        );
-      const duration = durationValue(Number(rawDuration));
+      const { date, duration } = availabilityQuery(url.searchParams, at);
       const occupied = await db.transaction(
         async (tx) => {
           await expire(tx, loc.id, date, at);
@@ -440,20 +497,9 @@ export async function createApp({
         },
         [inventoryKey(loc.id, date)],
       );
-      const slots = [];
-      for (let hour = 9; hour + duration <= 21; hour++) {
-        const time = `${String(hour).padStart(2, "0")}:00`;
-        const end = `${String(hour + duration).padStart(2, "0")}:00`;
-        slots.push({
-          time,
-          available:
-            startMillis(date, time) > at &&
-            !occupied.some(
-              (item) => item.start_time < end && item.end_time > time,
-            ),
-        });
-      }
-      return send(res, 200, { date, slots, closingTime: "21:00" });
+      return send(res, 200, {
+        date, slots: availableSlots(date, duration, at, occupied), closingTime: "21:00",
+      });
     }
     if (method === "POST" && path === "/api/bookings") {
       const bookingUser = await userSession(req);
@@ -587,13 +633,18 @@ export async function createApp({
         booking: publicBooking(result.booking),
       });
     }
-    const publicRead = path.match(/^\/api\/bookings\/([a-f0-9]{48})$/);
+    const publicRead = path.match(/^\/api\/bookings\/([a-f0-9]{48})(\/calendar\.ics)?$/);
     if (method === "GET" && publicRead) {
       let booking = await db
         .prepare("SELECT * FROM bookings WHERE public_token=?")
         .get(publicRead[1]);
       if (!booking)
         fail(404, "Заявка не найдена. Проверьте ссылку.", "BOOKING_NOT_FOUND");
+      if (publicRead[2]) {
+        if (booking.status !== "confirmed")
+          fail(409, "Календарь доступен после подтверждения бронирования.", "BOOKING_NOT_CONFIRMED");
+        return sendCalendar(res, booking);
+      }
       if (booking.status === "pending")
         booking = await db.transaction(
           async (tx) => {

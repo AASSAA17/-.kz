@@ -17,6 +17,8 @@ function schemaSql(kind) {
       reason TEXT NOT NULL DEFAULT '', consent_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS booking_slots ON bookings(location_id,date,status);
+    CREATE INDEX IF NOT EXISTS booking_availability_date ON bookings(date)
+      WHERE status IN ('pending','confirmed');
     CREATE TABLE IF NOT EXISTS idempotency (
       key TEXT PRIMARY KEY, payload_hash TEXT NOT NULL,
       booking_id TEXT NOT NULL REFERENCES bookings(id)
@@ -27,6 +29,7 @@ function schemaSql(kind) {
       reason TEXT NOT NULL, created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS block_slots ON blocks(location_id,date);
+    CREATE INDEX IF NOT EXISTS block_availability_date ON blocks(date);
     CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, expires_at BIGINT NOT NULL);
     CREATE TABLE IF NOT EXISTS login_attempts (
       throttle_key TEXT PRIMARY KEY, failures INTEGER NOT NULL, reset_at BIGINT NOT NULL

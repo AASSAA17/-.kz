@@ -95,27 +95,48 @@ function Home({ locations, error, retry }) {
   const [heroType, setHeroType] = useState("Все локации");
   const [searchDate, setSearchDate] = useState("");
   const [searchDuration, setSearchDuration] = useState(1);
-  const [availableIds, setAvailableIds] = useState(null);
-  const [appliedDate, setAppliedDate] = useState("");
-  const [appliedDuration, setAppliedDuration] = useState(1);
+  const [availability, setAvailability] = useState(null);
   const [finding, setFinding] = useState(false);
   const [findError, setFindError] = useState("");
+  const [crew, setCrew] = useState(0);
+  const [budget, setBudget] = useState(0);
+  const [savedOnly, setSavedOnly] = useState(false);
+  const [saved, setSaved] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("semka-saved-locations"));
+      return Array.isArray(stored) ? stored.filter((id) => typeof id === "string") : [];
+    } catch { return []; }
+  });
+  const resultsHeading = useRef(null);
+  function toggleSaved(id) {
+    const next = saved.includes(id) ? saved.filter((item) => item !== id) : [...saved, id];
+    setSaved(next);
+    try { localStorage.setItem("semka-saved-locations", JSON.stringify(next)); }
+    catch { /* Favorites remain available for this visit. */ }
+  }
+  function resetFilters() {
+    setFilter("Все локации");
+    setHeroType("Все локации");
+    setSearch("");
+    setSearchDate("");
+    setAvailability(null);
+    setCrew(0);
+    setBudget(0);
+    setSavedOnly(false);
+    setFindError("");
+  }
   async function findSpaces(event) {
     event.preventDefault();
     if (finding) return;
     setFinding(true); setFindError("");
     try {
-      let available = null;
-      if (searchDate) {
-        const results = await Promise.all(locations.map(async loc => {
-          const data = await api(`/locations/${loc.id}/availability?date=${searchDate}&duration=${searchDuration}`);
-          return data.slots.some(slot => slot.available) ? loc.id : null;
-        }));
-        available = results.filter(Boolean);
-      }
-      setAvailableIds(available); setFilter(heroType); setSearch("");
-      setAppliedDate(searchDate); setAppliedDuration(searchDuration);
-      document.getElementById("locations")?.scrollIntoView({ behavior: "smooth" });
+      const query = new URLSearchParams({ date: searchDate, duration: searchDuration });
+      const result = searchDate ? await api("/locations/availability?" + query) : null;
+      setAvailability(result);
+      setFilter(heroType);
+      setSearch("");
+      setSavedOnly(false);
+      resultsHeading.current?.focus();
     } catch (e) { setFindError(e.message); }
     finally { setFinding(false); }
   }
@@ -127,11 +148,24 @@ function Home({ locations, error, retry }) {
     "Сад",
     "Ангар",
   ];
+  const timesById = new Map(availability?.locations.map(({ id, times }) => [id, times]));
+  const totalDuration = availability?.duration ?? 1;
+  const budgetLabel = availability ? "за съёмку" : "в час";
+  function detailLink(id, time) {
+    const path = "/locations/" + id;
+    if (!availability) return path;
+    const query = new URLSearchParams({ date: availability.date, duration: availability.duration });
+    if (time) query.set("time", time);
+    return path + "?" + query;
+  }
   let list = locations.filter((l) => {
     const cat = l.type === "Крыша" ? "На открытом воздухе" : l.type;
     return (
       (filter === "Все локации" || cat === filter) &&
-      (availableIds === null || availableIds.includes(l.id)) &&
+      (!availability || timesById.get(l.id)?.length) &&
+      (!crew || l.capacity >= crew) &&
+      (!budget || l.price * totalDuration <= budget) &&
+      (!savedOnly || saved.includes(l.id)) &&
       `${l.name} ${l.description} ${l.type}`
         .toLowerCase()
         .includes(search.toLowerCase())
@@ -142,37 +176,39 @@ function Home({ locations, error, retry }) {
   return (
     <>
       <section className="discovery-hero" aria-labelledby="discovery-title">
-        <img className="discovery-photo" src="/images/garden.jpg" alt="Зелёное пространство Secret Garden" fetchPriority="high" />
         <div className="discovery-content">
-          <div className="eyebrow">АСТАНА · ПРОСТРАНСТВА ДЛЯ СЪЁМКИ</div>
-          <h1 id="discovery-title">Найдите место.<br />Создайте <em>свою историю.</em></h1>
-          <p>Светлые студии, городские крыши и тихие сады.<br />Выберите пространство для вашего следующего кадра.</p>
+          <div className="discovery-intro">
+            <div className="eyebrow"><Icon name="pin" size={16} /> Астана, Казахстан</div>
+            <h1 id="discovery-title">Локации <em>для съёмок</em></h1>
+            <p>Студии, крыши и открытые площадки. Найдите свободное время и узнайте стоимость до отправки заявки.</p>
+            <a href="#locations" className="discovery-browse">Смотреть все локации <Icon name="arrow" size={18} /></a>
+          </div>
+          <figure className="discovery-frame">
+            <img className="discovery-photo" src="/images/loft.jpg" alt="Интерьер демонстрационной локации Loft 01" fetchPriority="high" />
+            <figcaption><span>В каталоге</span><b>Loft 01</b><Link to="/locations/loft" aria-label="Открыть Loft 01"><Icon name="diagonal" size={22} /></Link></figcaption>
+          </figure>
           <form className="discovery-search" onSubmit={findSpaces}>
-            <label><span>Локация</span><select value={heroType} onChange={e => setHeroType(e.target.value)}>{categories.map(c => <option key={c}>{c}</option>)}</select></label>
-            <label><span>Дата съёмки</span><input type="date" min={astanaDate()} max={astanaDate(90)} value={searchDate} onChange={e => setSearchDate(e.target.value)} aria-label="Дата съёмки" /></label>
-            <label><span>Длительность</span><select value={searchDuration} onChange={e => setSearchDuration(Number(e.target.value))}>{[1,2,3,4,5,6,7,8].map(n => <option key={n} value={n}>{n} ч</option>)}</select></label>
-            <button className="button primary" disabled={finding || !locations.length}>{finding ? "Проверяем…" : "Найти место"}<Icon name="diagonal" /></button>
+            <label><span>Тип площадки</span><select disabled={finding} value={heroType} onChange={e => setHeroType(e.target.value)}>{categories.map(c => <option key={c}>{c}</option>)}</select></label>
+            <label><span>Дата съёмки</span><input disabled={finding} type="date" min={astanaDate()} max={astanaDate(90)} value={searchDate} onChange={e => setSearchDate(e.target.value)} /></label>
+            <label><span>Длительность</span><select disabled={finding} value={searchDuration} onChange={e => setSearchDuration(Number(e.target.value))}>{[1,2,3,4,5,6,7,8].map(n => <option key={n} value={n}>{n} ч</option>)}</select></label>
+            <button className="button primary" disabled={finding || !locations.length}>{finding ? "Проверяем…" : "Найти локацию"}<Icon name="search" /></button>
           </form>
           {findError && <div className="discovery-error" role="alert">{findError}</div>}
         </div>
-        <span className="discovery-caption">Secret Garden · демонстрационная локация</span>
       </section>
       <div className="discovery-facts">
-        <span><b>{locations.length || "—"}</b> пространств в каталоге</span>
-        <span><b>от 1 часа</b> аренда локации</span>
-        <span><b>₸</b> стоимость до отправки заявки</span>
+        <span><Icon name="pin" /><b>{locations.length || "—"}</b> локаций в каталоге</span>
+        <span><Icon name="clock" /><b>От 1 часа</b> аренда площадки</span>
+        <span><Icon name="check" /><b>Без предоплаты</b> заявка на сайте</span>
       </div>
       <section id="locations" className="catalog section">
         <div className="section-heading">
           <div>
-            <div className="eyebrow">МЕСТО ДЛЯ ВАШЕЙ ИДЕИ</div>
-            <h2>
-              Откройте свой ракурс
-            </h2>
+            <div className="eyebrow">Каталог · Астана</div>
+            <h2 ref={resultsHeading} tabIndex={-1}>Площадки для съёмок</h2>
           </div>
           <p>
-            У каждого пространства — свой характер.<br />
-            Найдите тот, который подходит вам.
+            Подберите площадку по времени, бюджету и размеру команды.
           </p>
         </div>
         <div className="catalog-tools">
@@ -187,6 +223,9 @@ function Home({ locations, error, retry }) {
                 {cat}
               </button>
             ))}
+            <button aria-pressed={savedOnly} className={savedOnly ? "selected saved-filter" : "saved-filter"} onClick={() => setSavedOnly(!savedOnly)}>
+              <Icon name="heart" size={16} /> Избранное {saved.length > 0 && saved.length}
+            </button>
           </div>
           <div className="catalog-controls">
             <label className="search-field">
@@ -198,6 +237,18 @@ function Home({ locations, error, retry }) {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </label>
+            <select aria-label="Размер команды" value={crew} onChange={(e) => setCrew(Number(e.target.value))}>
+              <option value={0}>Любая команда</option>
+              <option value={8}>От 8 человек</option>
+              <option value={12}>От 12 человек</option>
+              <option value={20}>От 20 человек</option>
+            </select>
+            <select aria-label="Максимальный бюджет" value={budget} onChange={(e) => setBudget(Number(e.target.value))}>
+              <option value={0}>Любой бюджет</option>
+              {[15000, 25000, 40000, 80000].map(value => (
+                <option key={value} value={value}>До {money(value)} {budgetLabel}</option>
+              ))}
+            </select>
             <select
               aria-label="Сортировка локаций"
               value={sort}
@@ -213,9 +264,9 @@ function Home({ locations, error, retry }) {
           <span>
             {list.length} {spacesLabel(list.length)}
           </span>
-          <span>{appliedDate ? `Свободные часы на ${dateLabel(appliedDate)} · ${appliedDuration} ч` : "Цены за час · время Астаны"}</span>
+          <span>{availability ? dateLabel(availability.date) + " · " + availability.duration + " ч" : "Цены за час · время Астаны"}</span>
         </div>
-        {appliedDate && <button className="clear-date" onClick={() => { setAvailableIds(null); setAppliedDate(""); setSearchDate(""); }}>Сбросить поиск по дате ×</button>}
+        {availability && <button className="clear-date" onClick={() => { setAvailability(null); setSearchDate(""); }}>Убрать дату ×</button>}
         <div aria-live="polite" className="sr-only">Найдено: {list.length}</div>
         {error ? (
           <>
@@ -229,39 +280,30 @@ function Home({ locations, error, retry }) {
         ) : list.length === 0 ? (
           <div className="empty">
             <Icon name="search" size={32} />
-            <h3>Здесь пока тихо</h3>
-            <p>Попробуйте другой запрос или тип пространства.</p>
+            <h3>{savedOnly && !saved.length ? "Избранное пока пусто" : "Подходящих площадок не найдено"}</h3>
+            <p>{savedOnly && !saved.length ? "Нажмите на сердечко, чтобы сохранить площадку в этом браузере." : "Попробуйте другую дату, длительность или сбросьте фильтры."}</p>
             <button
               className="button"
-              onClick={() => {
-                setSearch("");
-                setFilter("Все локации"); setHeroType("Все локации"); setAvailableIds(null); setAppliedDate(""); setSearchDate("");
-              }}
+              onClick={resetFilters}
             >
               Сбросить фильтры
             </button>
           </div>
         ) : (
           <div className="location-grid">
-            {list.map((loc, i) => (
-              <Link
-                to={`/locations/${loc.id}${appliedDate ? `?date=${appliedDate}&duration=${appliedDuration}` : ""}`}
-                key={loc.id}
-                className="location-card"
-              >
+            {list.map((loc) => (
+              <article className="location-card" key={loc.id}>
+                <button type="button" className="save-location" aria-label={"Избранное: " + loc.name} aria-pressed={saved.includes(loc.id)} onClick={() => toggleSaved(loc.id)}>
+                  <Icon name="heart" size={20} />
+                </button>
+                <Link to={detailLink(loc.id)} className="location-card-main">
                 <div className="card-image">
                   <img src={locationImage(loc)} alt={loc.name} loading="lazy" />
                   <span className="card-type">{loc.type}</span>
-                  <span className="card-arrow">
-                    <Icon name="diagonal" />
-                  </span>
                 </div>
                 <div className="card-body">
                   <div className="card-title">
                     <h3>{loc.name}</h3>
-                    <span>
-                      {String(locations.indexOf(loc) + 1).padStart(2, "0")}
-                    </span>
                   </div>
                   <p>{loc.shortDescription || loc.description}</p>
                   <div className="card-specs">
@@ -276,14 +318,26 @@ function Home({ locations, error, retry }) {
                   </div>
                   <div className="card-price">
                     <span>
-                      <b>{money(loc.price)}</b> / час
+                      <b>{money(loc.price * totalDuration)}</b>{availability ? " за " + totalDuration + " ч" : " / час"}
                     </span>
                     <span>
-                      Выбрать время <Icon name="arrow" size={16} />
+                      Подробнее <Icon name="arrow" size={16} />
                     </span>
                   </div>
                 </div>
-              </Link>
+                </Link>
+                {availability && (
+                  <div className="card-times">
+                    <span>Свободное начало</span>
+                    <div>
+                      {timesById.get(loc.id)?.slice(0, 3).map((time) => (
+                        <Link key={time} to={detailLink(loc.id, time)} aria-label={loc.name + ", " + time}>{time}</Link>
+                      ))}
+                      {timesById.get(loc.id)?.length > 3 && <Link to={detailLink(loc.id)}>Все слоты</Link>}
+                    </div>
+                  </div>
+                )}
+              </article>
             ))}
           </div>
         )}
@@ -361,7 +415,11 @@ function Home({ locations, error, retry }) {
 function LocationDetail({ location, index }) {
   const params = new URLSearchParams(window.location.search);
   const requestedDate = params.get("date") || "";
-  const initialDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) && requestedDate >= astanaDate() && requestedDate <= astanaDate(90) ? requestedDate : astanaDate(1);
+  const parsedDate = new Date(requestedDate + "T00:00:00Z");
+  const dateFromLink = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) &&
+    requestedDate >= astanaDate() && requestedDate <= astanaDate(90) &&
+    Number.isFinite(parsedDate.getTime()) && parsedDate.toISOString().slice(0, 10) === requestedDate;
+  const initialDate = dateFromLink ? requestedDate : astanaDate(1);
   const [date, setDate] = useState(initialDate);
   const [duration, setDuration] = useState(/^[1-8]$/.test(params.get("duration") || "") ? Number(params.get("duration")) : 1);
   const [slots, setSlots] = useState([]);
@@ -377,33 +435,52 @@ function LocationDetail({ location, index }) {
   const [comment, setComment] = useState("");
   const [consent, setConsent] = useState(false);
   const request = useRef({ signature: "", key: "" });
+  const preferredTime = useRef(dateFromLink ? params.get("time") : null);
   useEffect(() => {
-    let live = true;
-    setLoading(true);
+    const controller = new AbortController();
+    setLoading(Boolean(date));
     setTime("");
     setError("");
+    if (!date) {
+      setSlots([]);
+      return;
+    }
     api(
       `/locations/${location.id}/availability?date=${date}&duration=${duration}`,
+      { signal: controller.signal },
     )
       .then((d) => {
-        if (live) setSlots(d.slots);
+        if (controller.signal.aborted) return;
+        setSlots(d.slots);
+        const preferred = preferredTime.current;
+        preferredTime.current = null;
+        if (d.slots.some((slot) => slot.time === preferred && slot.available))
+          setTime(preferred);
+        else if (preferred)
+          setSubmitError("Выбранное время больше недоступно. Выберите другой интервал.");
       })
       .catch((e) => {
-        if (live) {
+        if (!controller.signal.aborted) {
           setError(e.message);
           setSlots([]);
         }
       })
       .finally(() => {
-        if (live) setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       });
-    return () => {
-      live = false;
-    };
+    return () => controller.abort();
   }, [location.id, date, duration, refresh]);
+  function chooseDate(value) {
+    if (value === date) return;
+    preferredTime.current = null;
+    setTime("");
+    setDate(value);
+    setLoading(Boolean(value));
+    setSubmitError("");
+  }
   async function submit(e) {
     e.preventDefault();
-    if (!time || !consent) return;
+    if (step !== 2 || submitting || !time || !consent) return;
     setSubmitting(true);
     setSubmitError("");
     const body = {
@@ -507,6 +584,8 @@ function LocationDetail({ location, index }) {
           <div className="booking-progress">
             <button
               className={step === 1 ? "current" : ""}
+              aria-current={step === 1 ? "step" : undefined}
+              disabled={submitting}
               onClick={() => setStep(1)}
             >
               1. Время
@@ -514,16 +593,22 @@ function LocationDetail({ location, index }) {
             <span />
             <button
               className={step === 2 ? "current" : ""}
-              disabled={!time}
+              aria-current={step === 2 ? "step" : undefined}
+              disabled={!time || submitting}
               onClick={() => setStep(2)}
             >
               2. Контакты
             </button>
           </div>
-          <form onSubmit={submit}>
+          <form onSubmit={submit} key={step} className="booking-step">
             {step === 1 ? (
               <>
                 <h3>Когда будем снимать?</h3>
+                <div className="quick-dates" aria-label="Быстрый выбор даты">
+                  {["Сегодня", "Завтра", "Послезавтра"].map((label, offset) => (
+                    <button key={label} type="button" aria-pressed={date === astanaDate(offset)} onClick={() => chooseDate(astanaDate(offset))}>{label}</button>
+                  ))}
+                </div>
                 <div className="form-row">
                   <label>
                     Дата
@@ -533,10 +618,7 @@ function LocationDetail({ location, index }) {
                       min={astanaDate()}
                       max={astanaDate(90)}
                       value={date}
-                      onChange={(e) => {
-                        setDate(e.target.value);
-                        setSubmitError("");
-                      }}
+                      onChange={(e) => chooseDate(e.target.value)}
                     />
                   </label>
                   <label>
@@ -544,6 +626,9 @@ function LocationDetail({ location, index }) {
                     <select
                       value={duration}
                       onChange={(e) => {
+                        preferredTime.current = null;
+                        setTime("");
+                        setLoading(Boolean(date));
                         setDuration(Number(e.target.value));
                         setSubmitError("");
                       }}
@@ -580,7 +665,7 @@ function LocationDetail({ location, index }) {
                     ))}
                   </div>
                 )}
-                {!loading && !slots.some((s) => s.available) && !error && (
+                {!loading && date && !slots.some((s) => s.available) && !error && (
                   <p className="muted">
                     На эту дату нет свободных интервалов. Выберите другой день.
                   </p>
@@ -626,6 +711,7 @@ function LocationDetail({ location, index }) {
                     type="button"
                     className="text-link"
                     onClick={() => setStep(1)}
+                    disabled={submitting}
                   >
                     Изменить время
                   </button>
@@ -793,6 +879,11 @@ function BookingStatus({ token }) {
                   })}{" "}
                   по Астане.
                 </p>
+              )}
+              {booking.status === "confirmed" && (
+                <a className="button full calendar-download" href={"/api/bookings/" + encodeURIComponent(token) + "/calendar.ics"}>
+                  <Icon name="calendar" /> Добавить в календарь
+                </a>
               )}
               <button
                 className="button primary full"
