@@ -99,7 +99,7 @@ npm test
 npm run build
 ```
 
-API-тесты создают изолированные тестовые базы и не требуют вашего `.env`. Workflow [Test and build](.github/workflows/ci.yml) повторяет `npm ci`, `npm test` и `npm run build` на Node.js 24 в Ubuntu и Windows при push и pull request. Результат конкретного запуска смотрите во вкладке Actions репозитория.
+API-тесты создают изолированные тестовые базы и не требуют вашего `.env`. Workflow [Semka CI](.github/workflows/ci.yml) запускает линтер, тесты и сборку на Node.js 24 в Ubuntu и Windows. На Ubuntu также выполняются проверка lockfile через OSV-Scanner и отдельный тест на временном PostgreSQL. После всех проверок результат `dist/` публикуется в Actions как `semka-web-<SHA>`. [ЛЗ 10](docs/labs/lz10/README.md) описывает дашборд DORA, правила ревью, релиз и откат.
 
 Пошаговый сценарий демонстрации, включая повторное бронирование занятого времени и перезапуск сервера, приведён в [проверке MVP](docs/manual-smoke-test.md). Архитектура, API и ограничения описаны в [технической заметке](docs/mvp-architecture.md).
 
