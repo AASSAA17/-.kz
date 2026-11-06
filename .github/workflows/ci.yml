@@ -1,4 +1,4 @@
-name: Test and build
+name: Semka CI
 
 on:
   push:
@@ -29,7 +29,94 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci
+      - name: Lint JavaScript and JSX
+        run: npm run lint
       - name: Run API tests
         run: npm test
+      - name: Measure server test coverage
+        if: runner.os == 'Linux'
+        run: node --experimental-test-coverage --test --test-coverage-include="server/*.mjs" --test-coverage-lines=60 tests/api.test.mjs tests/auth.test.mjs tests/flow.test.mjs
       - name: Build frontend
         run: npm run build
+      - name: Scan npm lockfile with OSV-Scanner
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          scanner="$RUNNER_TEMP/osv-scanner"
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/google/osv-scanner/releases/download/v2.7.0/osv-scanner_linux_amd64 \
+            --output "$scanner"
+          echo "160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b  $scanner" | sha256sum --check
+          chmod +x "$scanner"
+          "$scanner" scan source --lockfile=package-lock.json
+
+  postgres:
+    name: PostgreSQL integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: semka
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: semka_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U semka -d semka_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Test on a disposable PostgreSQL database
+        run: node --test tests/postgres.test.mjs
+        env:
+          TEST_DATABASE_URL: postgresql://semka:ci-only@127.0.0.1:5432/semka_test?sslmode=disable
+
+  secrets:
+    name: Secret leakage scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Scan Git history for secrets
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: 'false'
+          GITLEAKS_ENABLE_COMMENTS: 'false'
+
+  artifact:
+    name: Publish verified frontend
+    needs: [test-and-build, postgres, secrets]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Upload Vite build
+        uses: actions/upload-artifact@v7
+        with:
+          name: semka-web-${{ github.sha }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
