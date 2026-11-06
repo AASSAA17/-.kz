@@ -35,7 +35,7 @@ jobs:
         run: npm test
       - name: Measure server test coverage
         if: runner.os == 'Linux'
-        run: node --experimental-test-coverage --test --test-coverage-include="server/*.mjs" tests/api.test.mjs tests/auth.test.mjs tests/flow.test.mjs
+        run: node --experimental-test-coverage --test --test-coverage-include="server/*.mjs" --test-coverage-lines=60 tests/api.test.mjs tests/auth.test.mjs tests/flow.test.mjs
       - name: Build frontend
         run: npm run build
       - name: Scan npm lockfile with OSV-Scanner
