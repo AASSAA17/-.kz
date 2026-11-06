@@ -1,0 +1,46 @@
+name: DORA evidence (GitHub Pages)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/dora.yml'
+      - 'scripts/dora_dashboard.py'
+      - 'docs/labs/lz10/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: read
+
+jobs:
+  github-pages-dora:
+    name: GitHub Pages delivery metrics
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install plotting dependencies
+        run: python -m pip install -r docs/labs/lz10/requirements.txt
+      - name: Collect GitHub Deployments and generate dashboard
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          END_EXCLUSIVE="$(date -u -d tomorrow +%F)"
+          python scripts/dora_dashboard.py \
+            --repo 'AASSAA17/-.kz' \
+            --environment github-pages \
+            --from-utc 2026-09-25 \
+            --to-utc "$END_EXCLUSIVE" \
+            --out dora-output
+      - name: Attach reproducible evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: dora-github-pages-${{ github.sha }}
+          path: dora-output/
+          if-no-files-found: error
+          retention-days: 14
