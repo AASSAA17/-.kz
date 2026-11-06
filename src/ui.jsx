@@ -49,6 +49,7 @@ export function Icon({ name, size = 20, ...props }) {
       </>
     ),
     close: <path d="m6 6 12 12M18 6 6 18" />,
+    heart: <path d="M20.8 4.7a5.4 5.4 0 0 0-7.6 0L12 6l-1.2-1.3a5.4 5.4 0 0 0-7.6 7.6L12 21l8.8-8.7a5.4 5.4 0 0 0 0-7.6Z" />,
     calendar: (
       <>
         <rect x="3" y="5" width="18" height="16" rx="2" />
