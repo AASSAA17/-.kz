@@ -12,9 +12,11 @@ import { Icon, Link, ErrorBox, Loading, Status } from "./ui";
 import Admin from "./Admin";
 import { Auth } from "./Auth";
 import Planner from "./Planner";
+import Director from "./Director";
 import "./styles.css";
 import "./design.css";
 import "./planner.css";
+import "./cinema.css";
 
 function Header({ path }) {
   const [menu, setMenu] = useState(false);
@@ -55,7 +57,7 @@ function Header({ path }) {
           <Link to="/planner" className={path === "/planner" ? "active" : ""} aria-current={path === "/planner" ? "page" : undefined} onClick={(event) => {
             if (path === "/planner" && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) event.preventDefault();
           }}>Планировщик</Link>
-          <Link to="/#how">Как это работает</Link>
+          <Link to="/director" className={path === "/director" ? "active" : ""} aria-current={path === "/director" ? "page" : undefined}>Режиссёрская</Link>
           <Link to={signedIn ? "/profile" : "/login"} className="mobile-registration">{signedIn ? "Мои заявки" : "Войти"}</Link>
         </nav>
         <div className="header-right">
@@ -71,11 +73,11 @@ function Header({ path }) {
 }
 function Footer() {
   return (
-    <footer>
+    <footer className="site-footer">
       <Link to="/" className="brand">
         съёмка<span className="brand-dot">.kz</span>
       </Link>
-      <p>Место, где идея становится кадром.</p>
+      <Link to="/director">Режиссёрская</Link>
       <span>© {new Date().getFullYear()} Съёмка.kz</span>
       <Link to="/admin">
         Кабинет студии <Icon name="diagonal" size={14} />
@@ -189,20 +191,19 @@ function Home({ locations, error, retry }) {
   return (
     <>
       <section className="discovery-hero" aria-labelledby="discovery-title">
+        <picture className="hero-picture" aria-hidden="true">
+          <img src="/images/studio-cinema.webp" alt="" fetchPriority="high" />
+        </picture>
         <div className="discovery-content">
           <div className="discovery-intro">
-            <div className="eyebrow"><Icon name="pin" size={16} /> Астана · Локации для съёмок</div>
-            <h1 id="discovery-title">Место для <em>вашего кадра</em></h1>
-            <p>Студии, крыши и открытые площадки. Выберите локацию и сразу узнайте, когда она свободна и сколько стоит съёмка.</p>
+            <div className="eyebrow"><Icon name="pin" size={15} /> Локации для съёмок в Астане</div>
+            <h1 id="discovery-title">Найдите место<br /><em>для своего кадра.</em></h1>
+            <p>Выберите студию, крышу или открытую площадку, проверьте свободное время и соберите план съёмки.</p>
             <div className="discovery-actions">
-              <a href="#locations" className="button primary">Смотреть локации <Icon name="arrow" size={18} /></a>
-              <Link to="/planner" className="discovery-browse"><Icon name="calendar" size={18} /> Планировщик съёмки</Link>
+              <a href="#locations" className="button primary">Смотреть локации <Icon name="diagonal" size={19} /></a>
+              <Link to="/director" className="button hero-secondary"><Icon name="spark" size={18} /> Собрать план съёмки</Link>
             </div>
           </div>
-          <figure className="discovery-frame">
-            <img className="discovery-photo" src="/images/loft.jpg" alt="Интерьер демонстрационной локации Loft 01" fetchPriority="high" />
-            <figcaption><span>Лофт · 90 м²</span><b>Loft 01</b><Link to="/locations/loft" aria-label="Открыть Loft 01"><Icon name="diagonal" size={22} /></Link></figcaption>
-          </figure>
           <form className="discovery-search" onSubmit={findSpaces}>
             <label><span>Тип площадки</span><select disabled={finding} value={heroType} onChange={e => setHeroType(e.target.value)}>{categories.map(c => <option key={c}>{c}</option>)}</select></label>
             <label><span>Дата съёмки</span><input disabled={finding} type="date" min={astanaDate()} max={astanaDate(90)} value={searchDate} onChange={e => setSearchDate(e.target.value)} /></label>
@@ -212,11 +213,6 @@ function Home({ locations, error, retry }) {
           {findError && <div className="discovery-error" role="alert">{findError}</div>}
         </div>
       </section>
-      <div className="discovery-facts">
-        <span><Icon name="pin" /><b>{locations.length || "—"}</b> локаций в каталоге</span>
-        <span><Icon name="clock" /><b>От 1 часа</b> аренда площадки</span>
-        <span><Icon name="check" /><b>Без предоплаты</b> заявка на сайте</span>
-      </div>
       <section id="locations" className="catalog section">
         <div className="section-heading">
           <div>
@@ -366,6 +362,14 @@ function Home({ locations, error, retry }) {
           Демонстрационный каталог MVP. Фотографии, цены и описания приведены
           для знакомства с сервисом.
         </p>
+      </section>
+      <section className="director-callout section" aria-labelledby="director-callout-title">
+        <img src="/images/rooftop.jpg" alt="" loading="lazy" />
+        <div>
+          <h2 id="director-callout-title">Соберите съёмку <em>по кадрам.</em></h2>
+          <p>Подберите площадки под свет, команду и бюджет. Составьте шот-лист и скачайте бриф для команды.</p>
+          <Link to="/director" className="button primary">Открыть режиссёрскую <Icon name="diagonal" size={18} /></Link>
+        </div>
       </section>
       <section id="how" className="how section">
         <h2>
@@ -1010,6 +1014,8 @@ function App() {
           <Home locations={locations} error={error} retry={load} />
         ) : path === "/planner" ? (
           <Planner locations={locations} error={error} retry={load} />
+        ) : path === "/director" ? (
+          <Director locations={locations} error={error} retry={load} />
         ) : (
           <div className="empty">
             <h1>Этого кадра ещё нет</h1>

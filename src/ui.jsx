@@ -49,6 +49,9 @@ export function Icon({ name, size = 20, ...props }) {
       </>
     ),
     close: <path d="m6 6 12 12M18 6 6 18" />,
+    spark: <path d="m12 2 2.8 7.2L22 12l-7.2 2.8L12 22l-2.8-7.2L2 12l7.2-2.8L12 2Z" />,
+    download: <path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5" />,
+    plus: <path d="M12 5v14M5 12h14" />,
     menu: <path d="M4 6h16M4 12h16M4 18h16" />,
     left: <path d="m15 5-7 7 7 7" />,
     right: <path d="m9 5 7 7-7 7" />,
