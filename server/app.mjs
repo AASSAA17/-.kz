@@ -333,6 +333,16 @@ export async function createApp({
     if (!result) fail(404, "Локация не найдена.", "LOCATION_NOT_FOUND");
     return result;
   }
+  async function availabilitySnapshot(from, through, at) {
+    const occupied = await db.prepare(
+      "SELECT date,location_id,start_time,end_time FROM bookings WHERE date BETWEEN ? AND ? AND status IN ('pending','confirmed') AND (status='confirmed' OR expires_at>?) UNION ALL SELECT date,location_id,start_time,end_time FROM blocks WHERE date BETWEEN ? AND ?",
+    ).all(from, through, iso(at), from, through);
+    return Map.groupBy(occupied, (item) => `${item.date}/${item.location_id}`);
+  }
+  function freeTimes(snapshot, id, date, duration, at) {
+    return availableSlots(date, duration, at, snapshot.get(`${date}/${id}`) ?? [])
+      .filter((slot) => slot.available).map((slot) => slot.time);
+  }
   async function conflict(tx, locationId, date, start, end) {
     const booking = await tx
       .prepare(
@@ -465,17 +475,36 @@ export async function createApp({
       const at = now();
       const { date, duration } = availabilityQuery(url.searchParams, at);
       // Search is a snapshot. Booking writes still check conflicts under lock.
-      const occupied = await db.prepare(
-        "SELECT location_id,start_time,end_time FROM bookings WHERE date=? AND status IN ('pending','confirmed') AND (status='confirmed' OR expires_at>?) UNION ALL SELECT location_id,start_time,end_time FROM blocks WHERE date=?",
-      ).all(date, iso(at), date);
-      const byLocation = Map.groupBy(occupied, (item) => item.location_id);
+      const snapshot = await availabilitySnapshot(date, date, at);
       return send(res, 200, {
         date,
         duration,
         locations: locations.map(({ id }) => ({
           id,
-          times: availableSlots(date, duration, at, byLocation.get(id) ?? [])
-            .filter((slot) => slot.available).map((slot) => slot.time),
+          times: freeTimes(snapshot, id, date, duration, at),
+        })),
+      });
+    }
+    if (method === "GET" && path === "/api/locations/week") {
+      const at = now();
+      const { date, duration } = availabilityQuery(url.searchParams, at);
+      const ids = (url.searchParams.get("locations") || "").split(",");
+      if (ids.length > 3 || new Set(ids).size !== ids.length ||
+          ids.some((id) => !locations.some((loc) => loc.id === id))) {
+        fail(400, "Выберите от одной до трёх разных локаций.", "INVALID_LOCATIONS");
+      }
+      const last = astanaDate(at + 90 * DAY);
+      const first = startMillis(date, "00:00");
+      const days = Array.from({ length: 7 }, (_, offset) => astanaDate(first + offset * DAY))
+        .filter((day) => day <= last);
+      const snapshot = await availabilitySnapshot(date, days.at(-1), at);
+      return send(res, 200, {
+        duration,
+        days,
+        locations: ids.map((id) => ({
+          id,
+          total: location(id).price * duration,
+          schedule: days.map((day) => ({ date: day, times: freeTimes(snapshot, id, day, duration, at) })),
         })),
       });
     }

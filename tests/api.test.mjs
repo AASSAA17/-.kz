@@ -35,6 +35,44 @@ test("catalog search matches per-location availability and excludes expired hold
   assert.equal((await f.api("/api/locations/availability?date=" + date + "&duration=9")).data.code, "INVALID_DURATION");
 });
 
+test("weekly planner groups free slots by location and day and prices the full session", async (t) => {
+  const f = await fixture(t);
+  const date = "2026-09-26";
+  const nextDay = "2026-09-27";
+  const path = `/api/locations/week?date=${date}&duration=2&locations=garden,loft`;
+  assert.equal((await f.book(input({ date }))).status, 201);
+  const cookie = await f.login();
+  assert.equal((await f.api("/api/admin/blocks", {
+    method: "POST", cookie,
+    body: { locationId: "garden", date: nextDay, startTime: "10:00", duration: 1, reason: "Тест" },
+  })).status, 201);
+
+  const first = await f.api(path);
+  assert.equal(first.status, 200);
+  assert.equal(first.headers.get("cache-control"), "no-store");
+  assert.equal(first.data.days.length, 7);
+  assert.equal(first.data.days[0], date);
+  assert.equal(first.data.days.at(-1), "2026-10-02");
+  const [garden, loft] = first.data.locations;
+  assert.deepEqual([garden.id, garden.total, loft.id, loft.total], ["garden", 24000, "loft", 30000]);
+  assert.ok(garden.schedule[0].times.includes("09:00"));
+  assert.equal(garden.schedule[1].date, nextDay);
+  assert.ok(!garden.schedule[1].times.includes("09:00"));
+  assert.ok(!loft.schedule[0].times.includes("09:00"));
+  assert.ok(loft.schedule[1].times.includes("09:00"));
+
+  f.setTime(AT + 2 * 3600000);
+  assert.ok((await f.api(path)).data.locations[1].schedule[0].times.includes("09:00"));
+  const boundary = await f.api("/api/locations/week?date=2026-12-24&locations=loft");
+  assert.equal(boundary.status, 200);
+  assert.deepEqual(boundary.data.days, ["2026-12-24"]);
+  for (const ids of ["", "loft,loft", "unknown", "loft,garden,hangar,cyclorama"]) {
+    const invalid = await f.api(`/api/locations/week?date=${date}&locations=${ids}`);
+    assert.equal(invalid.status, 400);
+    assert.equal(invalid.data.code, "INVALID_LOCATIONS");
+  }
+});
+
 test("only confirmed public bookings export a private-data-free calendar with UTC times", async (t) => {
   const f = await fixture(t);
   const { id, publicToken } = (await f.book(input())).data.booking;
