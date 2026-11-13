@@ -191,9 +191,6 @@ function Home({ locations, error, retry }) {
   return (
     <>
       <section className="discovery-hero" aria-labelledby="discovery-title">
-        <picture className="hero-picture" aria-hidden="true">
-          <img src="/images/studio-cinema.webp" alt="" fetchPriority="high" />
-        </picture>
         <div className="discovery-content">
           <div className="discovery-intro">
             <div className="eyebrow"><Icon name="pin" size={15} /> Локации для съёмок в Астане</div>
@@ -204,6 +201,9 @@ function Home({ locations, error, retry }) {
               <Link to="/director" className="button hero-secondary"><Icon name="spark" size={18} /> Собрать план съёмки</Link>
             </div>
           </div>
+          <figure className="hero-picture" aria-hidden="true">
+            <img src="/images/studio-daylight.webp" alt="" fetchPriority="high" width="1536" height="1024" />
+          </figure>
           <form className="discovery-search" onSubmit={findSpaces}>
             <label><span>Тип площадки</span><select disabled={finding} value={heroType} onChange={e => setHeroType(e.target.value)}>{categories.map(c => <option key={c}>{c}</option>)}</select></label>
             <label><span>Дата съёмки</span><input disabled={finding} type="date" min={astanaDate()} max={astanaDate(90)} value={searchDate} onChange={e => setSearchDate(e.target.value)} /></label>
@@ -983,6 +983,10 @@ function App() {
     locations.find((l) => String(l.id) === decodePathSegment(detail[1]));
   return (
     <>
+      <div className="site-intro" aria-hidden="true">
+        <span className="site-intro-mark"><Icon name="camera" size={28} /></span>
+        <span>съёмка<span className="brand-dot">.kz</span></span>
+      </div>
       <Header path={path} />
       <main id="main">
         {["/login", "/register", "/verify-phone", "/profile"].includes(path) ? (<Auth path={path} />) : path === "/admin" ? (
