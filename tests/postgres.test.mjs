@@ -69,6 +69,11 @@ test("PostgreSQL: independent instances share durable, race-safe inventory", {
     const availability = await b.api("/api/locations/availability?date=" + body.date + "&duration=1");
     assert.equal(availability.status, 200);
     assert.ok(!availability.data.locations.find(({ id }) => id === body.locationId).times.includes(body.startTime));
+    const week = await b.api(`/api/locations/week?date=${body.date}&locations=loft,garden`);
+    assert.equal(week.status, 200);
+    assert.equal(week.data.days.length, 7);
+    assert.ok(!week.data.locations[0].schedule[0].times.includes(body.startTime));
+    assert.ok(week.data.locations[1].schedule[0].times.includes(body.startTime));
     assert.equal((await b.book({ ...body, startTime: "09:00", duration: 1 })).status, 201);
     assert.equal((await a.book({ ...body, startTime: "12:00", duration: 1 })).status, 201);
     assert.equal((await b.book({ ...body, locationId: "garden" })).status, 201);

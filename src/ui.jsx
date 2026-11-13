@@ -49,6 +49,10 @@ export function Icon({ name, size = 20, ...props }) {
       </>
     ),
     close: <path d="m6 6 12 12M18 6 6 18" />,
+    menu: <path d="M4 6h16M4 12h16M4 18h16" />,
+    left: <path d="m15 5-7 7 7 7" />,
+    right: <path d="m9 5 7 7-7 7" />,
+    share: <path d="M10 14a4 4 0 0 0 6 0l4-4a4 4 0 0 0-6-6l-2 2m2 4a4 4 0 0 0-6 0l-4 4a4 4 0 0 0 6 6l2-2" />,
     heart: <path d="M20.8 4.7a5.4 5.4 0 0 0-7.6 0L12 6l-1.2-1.3a5.4 5.4 0 0 0-7.6 7.6L12 21l8.8-8.7a5.4 5.4 0 0 0 0-7.6Z" />,
     calendar: (
       <>

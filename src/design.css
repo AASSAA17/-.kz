@@ -1,13 +1,26 @@
 /* Catalog and booking visual system. */
+@font-face {
+  font-family: Inter;
+  src: url('/fonts/inter.woff2') format('woff2');
+  font-weight: 400 800;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Cormorant Garamond';
+  src: url('/fonts/cormorant-garamond.woff2') format('woff2');
+  font-style: italic;
+  font-weight: 600;
+  font-display: swap;
+}
 :root {
-  --paper: #f8f7f3;
-  --orange: #a33b25;
-  --dark: #1c362e;
-  --line: #dedfd5;
-  --muted: #59675f;
+  --paper: #f6f3eb;
+  --orange: #a7452d;
+  --dark: #182d25;
+  --line: #dddcd0;
+  --muted: #56645a;
   color: #202e28;
   background: var(--paper);
-  font-family: "Segoe UI", Arial, sans-serif;
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
 }
 
 .site-header {
@@ -43,7 +56,7 @@
   padding: clamp(22px, 4vw, 56px);
   overflow: hidden;
   border-radius: 30px;
-  background: radial-gradient(ellipse at 94% 10%, #355548 0%, #203a32 47%, #192f28 100%);
+  background: radial-gradient(ellipse at 92% 0%, #395747 0%, #263f34 40%, #14261f 83%);
   color: #fffaf0;
 }
 .discovery-intro {
@@ -62,8 +75,8 @@
 }
 .discovery-intro h1 {
   margin: 24px 0 22px;
-  font-size: clamp(48px, 5.6vw, 86px);
-  font-weight: 650;
+  font-size: clamp(45px, 5.6vw, 85px);
+  font-weight: 750;
   letter-spacing: -.065em;
   line-height: .98;
 }
@@ -71,8 +84,8 @@
   display: block;
   margin-top: 6px;
   color: #ffd0b4;
-  font: italic 400 .94em/.98 Georgia, serif;
-  letter-spacing: -.065em;
+  font: italic 600 1.1em/.85 'Cormorant Garamond', Georgia, serif;
+  letter-spacing: -.055em;
 }
 .discovery-intro p {
   max-width: 380px;
@@ -87,8 +100,13 @@
   min-height: 44px;
   font-weight: 650;
 }
-.discovery-browse svg { transition: transform .2s ease; }
-.discovery-browse:hover svg { transform: translateX(5px); }
+.discovery-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 18px; }
+.discovery-actions .primary { background: #ffcaab; color: #262820; border-color: #ffcaab; }
+.discovery-actions .primary:hover { background: #ffdac4; border-color: #ffdac4; }
+.discovery-actions .discovery-browse { color: #fffaf0; font-size: 14px; }
+.discovery-actions .discovery-browse:hover { color: #ffcaab; }
+.discovery-actions svg { transition: transform .2s ease; }
+.discovery-actions a:hover svg { transform: translateX(4px); }
 .discovery-frame {
   position: relative;
   min-height: 355px;
@@ -99,7 +117,8 @@
   background: #795c49;
   animation: settle-in 510ms ease-out both;
 }
-.discovery-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.discovery-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .65s cubic-bezier(.22,.61,.36,1); }
+@media (hover: hover) { .discovery-frame:hover .discovery-photo { transform: scale(1.045); } }
 .discovery-frame::after {
   position: absolute;
   inset: 36% 0 0;
@@ -191,6 +210,10 @@
 .catalog .section-heading { align-items: end; }
 .catalog .section-heading h2 { font-size: clamp(32px, 4vw, 54px); letter-spacing: -.055em; }
 .catalog .eyebrow { letter-spacing: 1.4px; text-transform: uppercase; }
+.location-card .card-image img { object-position: center; }
+.booking-panel { box-shadow: 0 16px 40px #273e3011; }
+.detail-photo { border-radius: 24px; overflow: hidden; }
+.slots button { transition: background .18s ease, border-color .18s ease, color .18s ease; }
 .catalog-tools { margin-top: 26px; gap: 14px; }
 .filters button {
   min-height: 40px;
@@ -204,6 +227,8 @@
 .catalog-controls { display: grid; grid-template-columns: minmax(170px, 1.3fr) repeat(3, minmax(0, 1fr)); gap: 9px; }
 .catalog-controls select, .catalog-controls .search-field { max-width: none; min-width: 0; }
 .catalog-meta { font-size: 13px; gap: 12px; }
+.catalog-plan { margin: 0 10px 14px 0; min-height: 44px; border-color: #c4d2c2; background: #e4eee1; color: #203f30; }
+.catalog-plan:hover { border-color: #769181; background: #d6e6d4; }
 .clear-date {
   min-height: 40px;
   margin: 0 0 16px;
@@ -349,5 +374,5 @@ footer .brand-dot { color: #ffa781; }
   .location-card:hover { transform: none; }
   .location-card:hover img { transform: none; }
   .save-location:hover { scale: 1; }
-  .discovery-browse:hover svg { transform: none; }
+  .discovery-actions a:hover svg, .discovery-frame:hover .discovery-photo { transform: none; }
 }

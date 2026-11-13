@@ -11,8 +11,10 @@ import {
 import { Icon, Link, ErrorBox, Loading, Status } from "./ui";
 import Admin from "./Admin";
 import { Auth } from "./Auth";
+import Planner from "./Planner";
 import "./styles.css";
 import "./design.css";
+import "./planner.css";
 
 function Header({ path }) {
   const [menu, setMenu] = useState(false);
@@ -37,18 +39,23 @@ function Header({ path }) {
         </Link>
         <button
           className="menu-toggle"
-          aria-label="Открыть меню"
+          aria-label={menu ? "Закрыть меню" : "Открыть меню"}
           aria-expanded={menu}
+          aria-controls="primary-nav"
           onClick={() => setMenu(!menu)}
         >
-          <Icon name={menu ? "close" : "grid"} />
+          <Icon name={menu ? "close" : "menu"} />
         </button>
-        <nav className={menu ? "open" : ""} aria-label="Основная навигация">
+        <nav id="primary-nav" className={menu ? "open" : ""} aria-label="Основная навигация" onClick={(event) => {
+          if (event.target.closest("a")) setMenu(false);
+        }}>
           <Link to="/#locations" className={path === "/" ? "active" : ""}>
             Локации
           </Link>
+          <Link to="/planner" className={path === "/planner" ? "active" : ""} aria-current={path === "/planner" ? "page" : undefined} onClick={(event) => {
+            if (path === "/planner" && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) event.preventDefault();
+          }}>Планировщик</Link>
           <Link to="/#how">Как это работает</Link>
-          <Link to="/#about">О проекте</Link>
           <Link to={signedIn ? "/profile" : "/login"} className="mobile-registration">{signedIn ? "Мои заявки" : "Войти"}</Link>
         </nav>
         <div className="header-right">
@@ -151,6 +158,12 @@ function Home({ locations, error, retry }) {
   const timesById = new Map(availability?.locations.map(({ id, times }) => [id, times]));
   const totalDuration = availability?.duration ?? 1;
   const budgetLabel = availability ? "за съёмку" : "в час";
+  const favoritesForPlan = saved.filter((id) => locations.some((loc) => loc.id === id)).slice(0, 3);
+  const plannerParams = new URLSearchParams({ locations: favoritesForPlan.join(",") });
+  if (availability) {
+    plannerParams.set("date", availability.date);
+    plannerParams.set("duration", availability.duration);
+  }
   function detailLink(id, time) {
     const path = "/locations/" + id;
     if (!availability) return path;
@@ -178,14 +191,17 @@ function Home({ locations, error, retry }) {
       <section className="discovery-hero" aria-labelledby="discovery-title">
         <div className="discovery-content">
           <div className="discovery-intro">
-            <div className="eyebrow"><Icon name="pin" size={16} /> Астана, Казахстан</div>
-            <h1 id="discovery-title">Локации <em>для съёмок</em></h1>
-            <p>Студии, крыши и открытые площадки. Найдите свободное время и узнайте стоимость до отправки заявки.</p>
-            <a href="#locations" className="discovery-browse">Смотреть все локации <Icon name="arrow" size={18} /></a>
+            <div className="eyebrow"><Icon name="pin" size={16} /> Астана · Локации для съёмок</div>
+            <h1 id="discovery-title">Место для <em>вашего кадра</em></h1>
+            <p>Студии, крыши и открытые площадки. Выберите локацию и сразу узнайте, когда она свободна и сколько стоит съёмка.</p>
+            <div className="discovery-actions">
+              <a href="#locations" className="button primary">Смотреть локации <Icon name="arrow" size={18} /></a>
+              <Link to="/planner" className="discovery-browse"><Icon name="calendar" size={18} /> Планировщик съёмки</Link>
+            </div>
           </div>
           <figure className="discovery-frame">
             <img className="discovery-photo" src="/images/loft.jpg" alt="Интерьер демонстрационной локации Loft 01" fetchPriority="high" />
-            <figcaption><span>В каталоге</span><b>Loft 01</b><Link to="/locations/loft" aria-label="Открыть Loft 01"><Icon name="diagonal" size={22} /></Link></figcaption>
+            <figcaption><span>Лофт · 90 м²</span><b>Loft 01</b><Link to="/locations/loft" aria-label="Открыть Loft 01"><Icon name="diagonal" size={22} /></Link></figcaption>
           </figure>
           <form className="discovery-search" onSubmit={findSpaces}>
             <label><span>Тип площадки</span><select disabled={finding} value={heroType} onChange={e => setHeroType(e.target.value)}>{categories.map(c => <option key={c}>{c}</option>)}</select></label>
@@ -266,6 +282,11 @@ function Home({ locations, error, retry }) {
           </span>
           <span>{availability ? dateLabel(availability.date) + " · " + availability.duration + " ч" : "Цены за час · время Астаны"}</span>
         </div>
+        {savedOnly && favoritesForPlan.length > 0 && (
+          <Link className="button catalog-plan" to={"/planner?" + plannerParams}>
+            <Icon name="calendar" size={17} /> {favoritesForPlan.length === 1 ? "Расписание избранной локации" : `Сравнить избранное · ${favoritesForPlan.length} локации`} <Icon name="arrow" size={16} />
+          </Link>
+        )}
         {availability && <button className="clear-date" onClick={() => { setAvailability(null); setSearchDate(""); }}>Убрать дату ×</button>}
         <div aria-live="polite" className="sr-only">Найдено: {list.length}</div>
         {error ? (
@@ -347,7 +368,6 @@ function Home({ locations, error, retry }) {
         </p>
       </section>
       <section id="how" className="how section">
-        <div className="eyebrow">02 / МЕНЬШЕ ПЕРЕПИСКИ, БОЛЬШЕ ТВОРЧЕСТВА</div>
         <h2>
           От идеи до съёмки.
           <br />
@@ -356,27 +376,23 @@ function Home({ locations, error, retry }) {
         <div className="steps">
           {[
             [
-              "01",
               "Найдите своё место",
               "Посмотрите пространство, условия и стоимость. Выберите то, что подходит вашей идее.",
               "search",
             ],
             [
-              "02",
               "Выберите время",
               "Свободные часы уже в расписании. Стоимость аренды рассчитывается сразу.",
               "calendar",
             ],
             [
-              "03",
               "Получите подтверждение",
               "Оставьте заявку. Студия проверит её, а статус будет доступен по вашей личной ссылке.",
               "check",
             ],
-          ].map(([n, title, text, icon]) => (
-            <div key={n}>
+          ].map(([title, text, icon]) => (
+            <div key={title}>
               <div className="step-top">
-                <span>{n}</span>
                 <Icon name={icon} size={27} />
               </div>
               <h3>{title}</h3>
@@ -387,7 +403,6 @@ function Home({ locations, error, retry }) {
       </section>
       <section id="about" className="about section">
         <div>
-          <div className="eyebrow">СОЗДАНО ТЕМИ, КТО СНИМАЕТ</div>
           <h2>
             Хороший кадр
             <br />
@@ -412,7 +427,7 @@ function Home({ locations, error, retry }) {
   );
 }
 
-function LocationDetail({ location, index }) {
+function LocationDetail({ location }) {
   const params = new URLSearchParams(window.location.search);
   const requestedDate = params.get("date") || "";
   const parsedDate = new Date(requestedDate + "T00:00:00Z");
@@ -530,13 +545,11 @@ function LocationDetail({ location, index }) {
             {location.address || "Астана · демонстрационная локация"}
           </p>
         </div>
-        <span className="detail-index">/ {String(index).padStart(2, "0")}</span>
       </div>
       <div className="detail-grid">
         <div>
           <div className="detail-photo">
             <img src={locationImage(location)} alt={location.name} />
-            <span className="image-tag">ВАШЕ ПРОСТРАНСТВО ДЛЯ ТВОРЧЕСТВА</span>
           </div>
           <div className="detail-specs">
             <span>
@@ -574,6 +587,9 @@ function LocationDetail({ location, index }) {
               Оплата на сайте не требуется. В этой версии используется
               демонстрационный каталог.
             </p>
+            <Link className="text-link" to={"/planner?" + new URLSearchParams({ date, duration, locations: location.id })}>
+              Посмотреть свободное время на неделю <Icon name="arrow" size={16} />
+            </Link>
           </div>
         </div>
         <aside className="booking-panel">
@@ -974,7 +990,6 @@ function App() {
             <LocationDetail
               key={loc.id}
               location={loc}
-              index={locations.indexOf(loc) + 1}
             />
           ) : error ? (
             <div className="section">
@@ -993,6 +1008,8 @@ function App() {
           )
         ) : path === "/" ? (
           <Home locations={locations} error={error} retry={load} />
+        ) : path === "/planner" ? (
+          <Planner locations={locations} error={error} retry={load} />
         ) : (
           <div className="empty">
             <h1>Этого кадра ещё нет</h1>
